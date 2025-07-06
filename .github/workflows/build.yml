@@ -1,8 +1,9 @@
-on: [push]
+on:
+  push:
+    branches:
+      - main
+
 name: Build on macOS
-branches:
-  only:
-    - main
 jobs:
   build_mac_app:
     runs-on: macos-15
