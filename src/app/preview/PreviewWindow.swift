@@ -443,18 +443,61 @@ class PreviewWindow: NSWindow {
       subview.frame.origin.y - selectionPadding)
 
     let newSelectionFrame = CGRect(origin: newOrigin, size: newSize)
-    self.selectionView.frame = newSelectionFrame
 
-    let maskLayer = CAShapeLayer()
     let bounds = self.backgroundView.bounds
+    let newPath = CGMutablePath()
+    newPath.addRect(bounds)
+    newPath.addRoundedRect(
+      in: newSelectionFrame,
+      cornerWidth: 10,
+      cornerHeight: 10)
 
-    // Path: full rect minus selection rect (creates a "hole")
-    let path = CGMutablePath()
-    path.addRect(bounds)
-    path.addRoundedRect(in: newSelectionFrame, cornerWidth: CGFloat(8), cornerHeight: CGFloat(8))
-    maskLayer.path = path
-    maskLayer.fillRule = .evenOdd
+    if self.backgroundView.layer?.mask == nil {
+      let firstView = applicationView.subviews[0]
+      let firstViewSize = NSMakeSize(
+        firstView.frame.size.width + selectionPadding * 2,
+        firstView.frame.size.height + selectionPadding * 2)
+      let firstViewOrigin = NSMakePoint(
+        firstView.frame.origin.x - selectionPadding,
+        firstView.frame.origin.y - selectionPadding)
+      let firstViewFrame = CGRect(origin: firstViewOrigin, size: firstViewSize)
+      self.selectionView.frame = newSelectionFrame
 
-    self.backgroundView.layer?.mask = maskLayer
+      // Create a new mask layer if it doesn't exist
+      let maskLayer = CAShapeLayer()
+      maskLayer.fillRule = .evenOdd
+      maskLayer.frame = bounds
+
+      let firstPath = CGMutablePath()
+      firstPath.addRect(bounds)
+      firstPath.addRoundedRect(
+        in: firstViewFrame, cornerWidth: 10, cornerHeight: 10)
+      maskLayer.path = firstPath
+    }
+
+    // Animate both frame and mask in sync
+    NSAnimationContext.runAnimationGroup(
+      { context in
+        context.duration = 0.1
+        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        self.selectionView.animator().frame = newSelectionFrame
+
+        let maskLayer = CAShapeLayer()
+        maskLayer.fillRule = .evenOdd
+        maskLayer.frame = bounds
+        maskLayer.path = newPath
+
+        if let oldMask = self.backgroundView.layer?.mask as? CAShapeLayer,
+          let oldPath = oldMask.path
+        {
+          let animation = CABasicAnimation(keyPath: "path")
+          animation.fromValue = oldPath
+          animation.toValue = newPath
+          animation.duration = context.duration
+          animation.timingFunction = context.timingFunction
+          maskLayer.add(animation, forKey: "path")
+        }
+        self.backgroundView.layer?.mask = maskLayer
+      }, completionHandler: nil)
   }
 }
