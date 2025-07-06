@@ -8,8 +8,6 @@ jobs:
   build_mac_app:
     runs-on: macos-15
     name: Build Vechsel.app on macOS-15
-    needs:
-      - build_core
     steps:
       - uses: actions/checkout@master
       - uses: Bogdanp/setup-racket@v1.11
