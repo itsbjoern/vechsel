@@ -1,0 +1,81 @@
+on: [push]
+name: Build on macOS
+branches:
+  only:
+    - main
+jobs:
+  build_mac_app:
+    runs-on: macos-15
+    name: Build Vechsel.app on macOS-15
+    needs:
+      - build_core
+    steps:
+      - uses: actions/checkout@master
+      - uses: Bogdanp/setup-racket@v1.11
+        with:
+          architecture: 'arm64'
+          distribution: 'full'
+          variant: 'CS'
+          version: '8.17'
+          packages: http-easy-lib
+      - name: Install Noise
+        run: |
+          mkdir ../../sandbox
+          git clone --depth 1 --branch racket-8.17 https://github.com/Bogdanp/Noise ../../sandbox/Noise
+          raco pkg install -D --batch --auto ../../sandbox/noise/Racket/noise-serde-lib/
+          pushd ../../sandbox/Noise
+          make
+      - name: Install Certificates
+        run: |
+          # https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
+          MAC_DEV_CER_PATH=$RUNNER_TEMP/madev.p12
+          DEVELOPER_ID_CER_PATH=$RUNNER_TEMP/devid.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          echo -n "$MAC_DEV_CER" | base64 --decode -o $MAC_DEV_CER_PATH
+          echo -n "$DEVELOPER_ID_CER" | base64 --decode -o $DEVELOPER_ID_CER_PATH
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security import $MAC_DEV_CER_PATH -P "$MAC_DEV_CER_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security import $DEVELOPER_ID_CER_PATH -P "$DEVELOPER_ID_CER_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+        env:
+          DEVELOPER_ID_CER: ${{ secrets.DEVELOPER_ID_CER }}
+          DEVELOPER_ID_CER_PASSWORD: ${{ secrets.DEVELOPER_ID_CER_PASSWORD }}
+          MAC_DEV_CER: ${{ secrets.MAC_DEV_CER }}
+          MAC_DEV_CER_PASSWORD: ${{ secrets.MAC_DEV_CER_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      - name: Build Vechsel.app
+        run: |
+          mkdir -p dist
+          xcodebuild \
+            archive \
+            -project Vechsel.xcodeproj/ \
+            -scheme Vechsel \
+            -destination 'generic/platform=macOS' \
+            -archivePath dist/Vechsel.xcarchive
+          xcodebuild \
+            -exportArchive \
+            -archivePath dist/Vechsel.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath dist/ \
+            -allowProvisioningUpdates
+          npm install -g create-dmg@6
+          npx create-dmg dist/Vechsel.app dist/
+          mv dist/Vechsel*.dmg dist/Vechsel.dmg
+      - name: Notarize Vechsel.dmg
+        run: |
+          xcrun notarytool submit \
+            --team-id 'U8Q3Q7S4Y2' \
+            --apple-id 'mail@bjoernf.com' \
+            --password "$NOTARY_PASSWORD" \
+            --wait \
+            dist/Vechsel.dmg
+          xcrun stapler staple dist/Vechsel.dmg
+        env:
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+      - name: Upload Vechsel.dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vechsel.dmg
+          path: dist/Vechsel.dmg
