@@ -51,5 +51,5 @@ git commit -m "Bump version to $NEW_VERSION" -m "$RELEASE_NOTES"
 git tag -a "v$NEW_VERSION" -m "Release version $NEW_VERSION"
 
 # Push changes to the remote repository
-git push origin dev
+git push origin main
 git push origin "v$NEW_VERSION"
