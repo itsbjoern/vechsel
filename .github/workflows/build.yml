@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 name: Build on macOS
 jobs:
@@ -58,7 +60,7 @@ jobs:
           xcodebuild \
             -exportArchive \
             -archivePath dist/Vechsel.xcarchive \
-            -exportOptionsPlist ExportOptions.plist \
+            -exportOptionsPlist release/ExportOptions.plist \
             -exportPath dist/ \
             -allowProvisioningUpdates
           npm install -g create-dmg@6
@@ -75,8 +77,8 @@ jobs:
           xcrun stapler staple dist/Vechsel.dmg
         env:
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-      - name: Upload Vechsel.dmg
-        uses: actions/upload-artifact@v4
+
+      - uses: ncipollo/release-action@v1
         with:
-          name: Vechsel.dmg
-          path: dist/Vechsel.dmg
+          artifacts: "dist/Vechsel.dmg"
+          bodyFile: "release/release.md"
