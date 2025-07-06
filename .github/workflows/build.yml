@@ -10,6 +10,14 @@ jobs:
     name: Build Vechsel.app on macOS-15
     steps:
       - uses: actions/checkout@master
+      - name: Cache Racket dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/racket
+            ~/.local/share/racket
+          key: ${{ runner.os }}-racket-8.17
+
       - uses: Bogdanp/setup-racket@v1.11
         with:
           architecture: 'arm64'
