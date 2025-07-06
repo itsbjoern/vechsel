@@ -35,6 +35,20 @@ class ConfigViewController: NSViewController, PreferencePane {
   let reverseSequenceButton = SequenceButton(title: "", target: nil, action: nil)
   var recordingButton: SequenceButton?
 
+  // --- Begin Icon Size and Switcher Position (moved from General) ---
+  struct PreviewBoxSpec {
+    let size: CGFloat
+    let label: String
+    let color = NSColor.systemBlue
+  }
+
+  let previewSizes = [
+    PreviewBoxSpec(size: 75, label: "Small"),
+    PreviewBoxSpec(size: 100, label: "Medium"),
+    PreviewBoxSpec(size: 125, label: "Large"),
+  ]
+  var previewBoxes: [NSBox] = []
+
   override func loadView() {
     print("Loading ConfigViewController")
     // Container view for padding
@@ -109,6 +123,59 @@ class ConfigViewController: NSViewController, PreferencePane {
     reverseSeqStack.addArrangedSubview(reverseButtonStack)
     mainStack.addArrangedSubview(reverseSeqStack)
 
+    mainStack.addArrangedSubview(makeSectionHeader(title: "Icon Size"))
+
+    let sizeStack = NSStackView(
+      views: self.previewSizes.map { box in
+        makePreviewBox(spec: box)
+      })
+    sizeStack.orientation = .horizontal
+    sizeStack.spacing = 8
+    sizeStack.alignment = .top
+    sizeStack.distribution = .equalSpacing
+    mainStack.addArrangedSubview(sizeStack)
+    highlightSelectedPreviewBox(selectedSize: PreferenceStore.shared.iconSize)
+
+    mainStack.addArrangedSubview(makeSectionHeader(title: "Switcher Position"))
+    let explainerLabel = NSLabel(
+      text:
+        "You can move the position of the switcher preview by dragging it while it is active. Click the button below to reset it back to the center of the screen."
+    )
+    explainerLabel.lineBreakMode = .byWordWrapping
+    explainerLabel.maximumNumberOfLines = 0
+    explainerLabel.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+    explainerLabel.textColor = .secondaryLabelColor
+    explainerLabel.setContentHuggingPriority(.defaultHigh, for: .vertical)
+    explainerLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    explainerLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    explainerLabel.widthAnchor.constraint(
+      lessThanOrEqualToConstant: 400
+    ).isActive = true  // Limit width for better readability
+    mainStack.addArrangedSubview(explainerLabel)
+
+    // Reset preview position
+    let resetStack = NSStackView()
+    resetStack.orientation = .horizontal
+    resetStack.spacing = 12
+    resetStack.alignment = .centerY
+    let resetLabel = NSLabel(text: "Reset Position")
+    resetLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    resetLabel.textColor = .labelColor
+    resetStack.addArrangedSubview(resetLabel)
+
+    let resetPreviewButton = NSButton(
+      title: "", target: self, action: #selector(resetPreview(_:)))
+    resetPreviewButton.title = "Reset"
+    resetPreviewButton.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    resetPreviewButton.bezelStyle = .rounded
+    resetPreviewButton.contentTintColor = .controlAccentColor
+    resetPreviewButton.sizeToFit()
+    resetPreviewButton.needsDisplay = true
+    resetPreviewButton.setFrameX(-5)
+    resetStack.addArrangedSubview(resetPreviewButton)
+
+    mainStack.addArrangedSubview(resetStack)
+
     // Section: Other
     mainStack.addArrangedSubview(makeSectionHeader(title: "Other"))
 
@@ -130,6 +197,25 @@ class ConfigViewController: NSViewController, PreferencePane {
     mouseStack.addArrangedSubview(mouseLabel)
     mouseStack.addArrangedSubview(mouseCheckbox)
     mainStack.addArrangedSubview(mouseStack)
+
+    // Add Done and Quit Vechsel buttons
+    let buttonStack = NSStackView()
+    buttonStack.orientation = .horizontal
+    buttonStack.spacing = 12
+    buttonStack.alignment = .centerY
+
+    let doneButton = NSButton(title: "Done", target: self, action: #selector(doneButtonPressed))
+    doneButton.bezelStyle = .rounded
+    doneButton.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+    buttonStack.addArrangedSubview(doneButton)
+
+    let quitButton = NSButton(
+      title: "Quit Vechsel", target: self, action: #selector(quitButtonPressed))
+    quitButton.bezelStyle = .rounded
+    quitButton.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+    buttonStack.addArrangedSubview(quitButton)
+
+    mainStack.addArrangedSubview(buttonStack)
 
     container.addSubview(mainStack)
     self.view = container
@@ -208,4 +294,126 @@ class ConfigViewController: NSViewController, PreferencePane {
     PreferenceStore.shared.enableMouseSelection = isOn
   }
 
+  // Preview size boxes
+  func makePreviewBox(spec: PreviewBoxSpec) -> NSStackView {
+    // Outer wrapper for alignment and background
+    let wrapper = NSBox()
+    wrapper.boxType = .custom
+    wrapper.cornerRadius = 18
+    wrapper.fillColor = spec.color.withAlphaComponent(0.09)
+    wrapper.translatesAutoresizingMaskIntoConstraints = false
+    wrapper.widthAnchor.constraint(equalToConstant: self.previewSizes.last!.size + 30).isActive =
+      true
+    wrapper.wantsLayer = true
+    wrapper.layer?.borderWidth = 1
+    wrapper.layer?.borderColor = spec.color.withAlphaComponent(0.18).cgColor
+    wrapper.layer?.cornerRadius = 18
+    wrapper.animator()
+    self.previewBoxes.append(wrapper)
+    let clickGesture = NSClickGestureRecognizer(
+      target: self, action: #selector(self.previewBoxClicked(_:)))
+    wrapper.identifier = NSUserInterfaceItemIdentifier("\(Int(spec.size))")
+    wrapper.addGestureRecognizer(clickGesture)
+    let innerStack = NSStackView()
+    innerStack.orientation = .vertical
+    innerStack.alignment = .centerX
+    innerStack.spacing = 16
+    innerStack.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+    innerStack.translatesAutoresizingMaskIntoConstraints = false
+    let boxOuter = NSBox()
+    boxOuter.boxType = .custom
+    boxOuter.fillColor = .clear
+    boxOuter.borderColor = .clear
+    boxOuter.widthAnchor.constraint(equalToConstant: self.previewSizes.last!.size).isActive = true
+    boxOuter.heightAnchor.constraint(equalToConstant: self.previewSizes.last!.size).isActive = true
+    let box = NSBox()
+    box.boxType = .custom
+    box.cornerRadius = 14
+    box.fillColor = spec.color.withAlphaComponent(0.18)
+    box.borderColor = .clear
+    box.translatesAutoresizingMaskIntoConstraints = false
+    boxOuter.addSubview(box)
+    box.widthAnchor.constraint(equalToConstant: spec.size).isActive = true
+    box.heightAnchor.constraint(equalToConstant: spec.size).isActive = true
+    box.centerXAnchor.constraint(equalTo: boxOuter.centerXAnchor).isActive = true
+    box.centerYAnchor.constraint(equalTo: boxOuter.centerYAnchor).isActive = true
+    box.wantsLayer = true
+    box.layer?.cornerRadius = 14
+    box.layer?.backgroundColor = spec.color.withAlphaComponent(0.10).cgColor
+    let textLabel = NSLabel(text: spec.label)
+    textLabel.alignment = .center
+    textLabel.font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    textLabel.textColor = .secondaryLabelColor
+    let pxLabel = NSLabel(text: "\(Int(spec.size)) px")
+    pxLabel.alignment = .center
+    pxLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    pxLabel.textColor = .tertiaryLabelColor
+    let labelStack = NSStackView(views: [textLabel, pxLabel])
+    labelStack.orientation = .vertical
+    labelStack.alignment = .centerX
+    labelStack.spacing = 1
+    innerStack.addArrangedSubview(boxOuter)
+    innerStack.addArrangedSubview(labelStack)
+    wrapper.contentView?.addSubview(innerStack)
+    NSLayoutConstraint.activate([
+      innerStack.centerXAnchor.constraint(equalTo: wrapper.contentView!.centerXAnchor),
+      innerStack.centerYAnchor.constraint(equalTo: wrapper.contentView!.centerYAnchor),
+      innerStack.leadingAnchor.constraint(
+        greaterThanOrEqualTo: wrapper.contentView!.leadingAnchor, constant: 0),
+      innerStack.trailingAnchor.constraint(
+        lessThanOrEqualTo: wrapper.contentView!.trailingAnchor, constant: 0),
+      innerStack.topAnchor.constraint(
+        greaterThanOrEqualTo: wrapper.contentView!.topAnchor, constant: 0),
+      innerStack.bottomAnchor.constraint(
+        lessThanOrEqualTo: wrapper.contentView!.bottomAnchor, constant: 0),
+    ])
+    let stack = NSStackView(views: [wrapper])
+    stack.orientation = .vertical
+    stack.alignment = .leading
+    stack.spacing = 0
+    return stack
+  }
+
+  func highlightSelectedPreviewBox(selectedSize: Int) {
+    for box in self.previewBoxes {
+      if let id = box.identifier?.rawValue, Int(id) == selectedSize {
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = 0.18
+          box.layer?.borderColor = NSColor.controlAccentColor.cgColor
+          box.layer?.shadowColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+          box.layer?.shadowOpacity = 1
+          box.layer?.shadowRadius = 8
+          box.layer?.shadowOffset = CGSize(width: 0, height: 2)
+        }
+      } else {
+        NSAnimationContext.runAnimationGroup { context in
+          context.duration = 0.18
+          box.layer?.borderColor = NSColor.clear.cgColor
+          box.layer?.shadowOpacity = 0
+        }
+      }
+    }
+  }
+
+  @objc func previewBoxClicked(_ gesture: NSClickGestureRecognizer) {
+    guard let box = gesture.view as? NSBox,
+      let id = box.identifier?.rawValue,
+      let size = Int(id)
+    else { return }
+    PreferenceStore.shared.iconSize = size
+    highlightSelectedPreviewBox(selectedSize: size)
+  }
+
+  @objc func resetPreview(_ button: NSButton) {
+    PreferenceStore.shared.previewY = 0
+  }
+  // --- End Icon Size and Switcher Position ---
+
+  @objc func doneButtonPressed(_ sender: NSButton) {
+    self.view.window?.close()
+  }
+
+  @objc func quitButtonPressed(_ sender: NSButton) {
+    NSApplication.shared.terminate(nil)
+  }
 }

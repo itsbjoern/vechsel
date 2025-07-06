@@ -144,9 +144,14 @@ class NSPreferenceController: NSWindowController, NSWindowDelegate, NSToolbarDel
       titleSize.width + newContentSize.width,
       titleSize.height + newContentSize.height)
 
+    // let origin = NSMakePoint(
+    //   self.window!.frame.origin.x,
+    //   self.window!.frame.origin.y + oldContentSize.height - newContentSize.height
+    // )
+
     let origin = NSMakePoint(
-      self.window!.frame.origin.x,
-      self.window!.frame.origin.y + oldContentSize.height - newContentSize.height
+      NSScreen.main!.frame.width / 2 - newFrameSize.width / 2,
+      NSScreen.main!.frame.height / 2 - newFrameSize.height / 2
     )
 
     return NSRect(origin: origin, size: newFrameSize)

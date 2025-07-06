@@ -7,6 +7,7 @@
 //
 
 import Cocoa
+import ServiceManagement
 
 class PreferenceStore {
   fileprivate static var _instance: PreferenceStore?
@@ -123,6 +124,39 @@ class PreferenceStore {
     }
   }
 
+  private var _openAtLogin = false
+  var openAtLogin: Bool {
+    get {
+      return _openAtLogin
+    }
+    set {
+      _openAtLogin = newValue
+      DispatchQueue.main.async {
+        UserDefaults.standard.set(
+          newValue, forKey: "\(Bundle.main.bundleIdentifier!).openAtLogin")
+        // Register/unregister with macOS
+        PreferenceStore.setOpenAtLogin(enabled: newValue)
+      }
+    }
+  }
+
+  static func setOpenAtLogin(enabled: Bool) {
+    if #available(macOS 13.0, *) {
+      // Use SMAppService for modern macOS
+      do {
+        if enabled {
+          try ServiceManagement.SMAppService.mainApp.register()
+        } else {
+          try ServiceManagement.SMAppService.mainApp.unregister()
+        }
+      } catch {
+        print("Failed to update login item: \(error)")
+      }
+    } else {
+      // Fallback for older macOS (optional, can use SMLoginItemSetEnabled if helper exists)
+    }
+  }
+
   fileprivate init() {
     _mainSequence =
       UserDefaults.standard.object(forKey: "\(Bundle.main.bundleIdentifier!).mainSequence")
@@ -149,5 +183,9 @@ class PreferenceStore {
         forKey: "\(Bundle.main.bundleIdentifier!).enableMouseSelection") as? Bool
       ?? _enableMouseSelection
 
+    _openAtLogin =
+      UserDefaults.standard.object(
+        forKey: "\(Bundle.main.bundleIdentifier!).openAtLogin") as? Bool
+      ?? _openAtLogin
   }
 }

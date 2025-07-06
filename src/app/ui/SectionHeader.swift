@@ -26,7 +26,7 @@ func makeSectionHeader(title: String) -> NSStackView {
   let rightLine = makeLine()
 
   let label = NSLabel(text: title)
-  label.font = NSFont.systemFont(ofSize: 15, weight: .bold)
+  label.font = NSFont.systemFont(ofSize: 13, weight: .bold)
   label.textColor = .labelColor
   label.alignment = .center
   label.setContentHuggingPriority(.required, for: .horizontal)
